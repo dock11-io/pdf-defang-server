@@ -30,6 +30,35 @@ container-based tool ([Dangerzone](https://dangerzone.rocks/)), but no clean
 drop-in library that says "give me this PDF without active content." This is
 that library.
 
+## What this protects against — and what it does not
+
+Be precise about the threat model before you rely on this.
+
+**In scope.** Content the PDF *asks a viewer to execute*: document and
+annotation JavaScript, `/OpenAction` and `/AA` auto-actions, `/Launch` and the
+other dangerous action types, embedded files, XFA, and URI actions pointing at
+`javascript:`, `file:`, `data:` and friends. This is a real and actively
+exploited class — removing it is worth doing, and it costs you a few
+milliseconds per file.
+
+**Out of scope.** Memory-corruption bugs in the viewer's *parser* — the
+heap overflows and use-after-frees that turn up in PDFium and Acrobat several
+times a year. Those fire on malformed structure, with no active content
+involved at all. Stripping actions does nothing to them, and neither does any
+other structural sanitizer.
+
+If that is your threat model — hostile documents from untrusted senders,
+journalists, incident response — you want render-to-pixels reconstruction
+inside a disposable sandbox, i.e. [Dangerzone](https://dangerzone.rocks/).
+Not this. A library installed into your own process inevitably parses the
+hostile file *in* your process; the isolation is the protection, and a
+library cannot ship isolation.
+
+This library is a cheap, high-value layer for a normal web app that accepts
+PDF uploads and serves them back. It is one layer, not a guarantee. Run it
+behind an antivirus pass on the original upload, and keep your viewers
+patched.
+
 ## Install
 
 ```bash

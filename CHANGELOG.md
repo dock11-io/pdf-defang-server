@@ -55,6 +55,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bytes), so callers that deliberately want the untouched file — to
   quarantine it or hand it to another scanner — can still reach it.
 
+### Documentation
+
+- Added an explicit threat-model section to the README and docs homepage:
+  what this library removes (executable content the PDF asks a viewer to run)
+  and what it cannot help with (memory-corruption bugs in the viewer's parser,
+  which fire on malformed structure with no active content involved). Readers
+  whose threat model is hostile documents are pointed at sandboxed
+  render-to-pixels reconstruction instead — a library installed into your own
+  process parses the hostile file *in* your process, and isolation is not
+  something a library can ship.
+
 ### Unchanged
 
 - `sanitize()` (the path-based API) still returns `False` on failure rather
