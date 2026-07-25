@@ -55,10 +55,13 @@ Requires Python 3.9+ and pikepdf 8+.
 === "Bytes API"
 
     ```python
-    from pdf_defang import sanitize_bytes
+    from pdf_defang import SanitizeError, sanitize_bytes
 
     raw = await uploaded_file.read()
-    cleaned = sanitize_bytes(raw)
+    try:
+        cleaned = sanitize_bytes(raw)
+    except SanitizeError:
+        ...  # nothing was stripped - reject, don't serve the original
     # 'cleaned' is the sanitized PDF as bytes - no disk involved
     ```
 

@@ -116,6 +116,41 @@ class SanitizeReport:
         }
 
 
+class SanitizeError(Exception):
+    """
+    Raised when a PDF could not be sanitized.
+
+    The two causes are a PDF that cannot be parsed at all (truncated,
+    corrupt, or not a PDF) and an encrypted PDF opened without the right
+    password. In both cases nothing was stripped, so there is no cleaned
+    output to return.
+
+    This exists because the bytes API has no other way to signal failure:
+    its success value and its failure value are both ``bytes``, so a caller
+    that does not inspect a report cannot tell them apart and would serve
+    the untouched input back to a user. Raising makes the failure
+    impossible to ignore by accident.
+
+    Attributes:
+        report: The :class:`SanitizeReport` for the failed run. ``error``
+            holds the underlying message; every count is zero.
+        original: The input bytes, unmodified. Available so a caller that
+            deliberately wants to fall back to the original (quarantine it,
+            forward it to a different scanner) can still reach it.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        report: SanitizeReport,
+        original: bytes | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.report = report
+        self.original = original
+
+
 @overload
 def sanitize(
     pdf_path: str | os.PathLike[str],

@@ -7,7 +7,7 @@ the top level::
         sanitize, scan,
         sanitize_async, scan_async,
         sanitize_bytes, scan_bytes,
-        SanitizeReport, ScanReport, Level,
+        SanitizeReport, ScanReport, SanitizeError, Level,
     )
 
 ## Sanitization levels
@@ -88,7 +88,7 @@ framework.
 
 ## Bytes API
 
-### `sanitize_bytes(data, *, return_report=False, password=None, level="strict")`
+### `sanitize_bytes(data, *, return_report=False, password=None, level="strict", raise_on_error=True)`
 
 Sanitize a PDF given as `bytes`. Returns cleaned bytes.
 
@@ -99,15 +99,39 @@ Sanitize a PDF given as `bytes`. Returns cleaned bytes.
 - `password`: For encrypted PDFs.
 - `level` (`"strict"` or `"balanced"`): Same semantics as
   `sanitize()`. Default `"strict"`.
+- `raise_on_error` (`bool`, default `True`): Raise `SanitizeError` when the
+  PDF cannot be parsed or decrypted, instead of returning the untouched
+  input. See the warning below before turning this off.
 
 **Returns:**
 
 - `bytes` (cleaned PDF) when `return_report=False`.
 - `tuple[bytes, SanitizeReport]` when `return_report=True`.
-- On failure: returns the **original** input bytes unchanged. Check
-  `report.error` to detect this.
 
-**Raises:** `ValueError` if `level` is not `"strict"` or `"balanced"`.
+**Raises:**
+
+- `SanitizeError` if the PDF could not be parsed, or is encrypted and the
+  password is missing or wrong. Nothing was stripped. `exc.report` holds the
+  details; `exc.original` holds the input bytes.
+- `ValueError` if `level` is not `"strict"` or `"balanced"`.
+
+!!! danger "`raise_on_error=False` fails open"
+    In that mode a failure returns the **original, unsanitized bytes** - a
+    value indistinguishable from a clean result. Code that passes the return
+    value straight back to a user serves exactly the file it meant to clean.
+    Always check `SanitizeReport.error` if you opt out. A `RuntimeWarning` is
+    emitted on every such failure.
+
+```python
+from pdf_defang import SanitizeError, sanitize_bytes
+
+try:
+    cleaned = sanitize_bytes(raw)
+except SanitizeError as exc:
+    # Nothing was stripped - reject, quarantine, or route elsewhere.
+    # Do NOT serve exc.original to the user.
+    return reject(str(exc))
+```
 
 ### `scan_bytes(data, *, password=None)`
 
@@ -142,6 +166,20 @@ Fields:
 | `error` | `str` or `None` | Error message if sanitization failed |
 
 Helper: `report.as_dict()` returns a JSON-serialisable plain dict.
+
+### `SanitizeError`
+
+Raised by `sanitize_bytes()` when the PDF could not be parsed or decrypted.
+Subclass of `Exception`.
+
+| Attribute | Type | Meaning |
+|---|---|---|
+| `report` | `SanitizeReport` | The failed run's report; `error` holds the underlying message |
+| `original` | `bytes` or `None` | The input bytes, unmodified |
+
+`original` exists so a caller that deliberately wants the untouched file
+(quarantine it, hand it to another scanner) can still reach it - not so it
+can be served to a user.
 
 ### `ScanReport`
 

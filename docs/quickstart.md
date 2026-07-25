@@ -62,10 +62,13 @@ async def upload_handler(path):
 ### In memory (S3, streaming, Lambda)
 
 ```python
-from pdf_defang import sanitize_bytes
+from pdf_defang import SanitizeError, sanitize_bytes
 
 raw_pdf: bytes = ...   # from S3, HTTP, anywhere
-cleaned: bytes = sanitize_bytes(raw_pdf)
+try:
+    cleaned: bytes = sanitize_bytes(raw_pdf)
+except SanitizeError:
+    ...  # unparseable or encrypted: nothing was stripped, so reject it
 # No disk involved. Ship `cleaned` back to S3 / browser.
 ```
 

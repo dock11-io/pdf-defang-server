@@ -5,6 +5,66 @@ All notable changes to `pdf-defang` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-07-25
+
+### Security / Breaking
+
+- **`sanitize_bytes()` no longer fails open.** A PDF that cannot be parsed,
+  or an encrypted PDF opened without the right password, now raises the new
+  `SanitizeError` instead of returning the original bytes unchanged.
+
+  Previously, on a parse failure with the default `return_report=False`,
+  the function returned the **untouched input** — a value indistinguishable
+  from a clean result. The obvious wrapper:
+
+  ```python
+  cleaned = sanitize_bytes(await file.read())
+  return Response(cleaned, media_type="application/pdf")
+  ```
+
+  served a `200 OK` carrying exactly the unsanitized file the caller meant
+  to clean, with no exception and no return-value signal — only an internal
+  log line. That is the worst direction for a sanitizer to fail in, and it
+  is most likely to happen on the files that matter most: a PDF crafted to
+  confuse a parser is precisely the kind that fails to parse.
+
+  Reported in the write-up accompanying `dock11-io/pdf-defang-server`, which
+  rated it high severity. Thank you.
+
+  **Migration:** wrap the call, or pass `raise_on_error=False` to keep the
+  old behaviour.
+
+  ```python
+  from pdf_defang import SanitizeError, sanitize_bytes
+
+  try:
+      cleaned = sanitize_bytes(raw)
+  except SanitizeError as exc:
+      reject(str(exc))          # exc.report has the details,
+                                # exc.original has the input bytes
+  ```
+
+- `raise_on_error=False` restores the 0.1.x return-the-input behaviour, but
+  now also emits a `RuntimeWarning` naming the returned bytes as
+  unsanitized, so the failure is never fully silent.
+
+### Added
+
+- `SanitizeError`, exported from the package root. Carries `.report`
+  (the `SanitizeReport` for the failed run) and `.original` (the input
+  bytes), so callers that deliberately want the untouched file — to
+  quarantine it or hand it to another scanner — can still reach it.
+
+### Unchanged
+
+- `sanitize()` (the path-based API) still returns `False` on failure rather
+  than raising. Its failure value is a `bool`, which cannot be mistaken for
+  a cleaned document and cannot be served to a user by accident; the file on
+  disk is left untouched. The asymmetry in this release matches a real
+  asymmetry in the two APIs.
+- `scan_bytes()` still reports failures via `ScanReport.error`. A scan report
+  is not a document and carries no risk of being served.
+
 ## [0.1.2] - 2026-05-21
 
 ### Fixed

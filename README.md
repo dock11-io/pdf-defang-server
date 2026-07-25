@@ -75,10 +75,15 @@ async def handle_upload(path):
 ### In-memory API (S3, Lambda, no disk)
 
 ```python
-from pdf_defang import sanitize_bytes
+from pdf_defang import SanitizeError, sanitize_bytes
 
 raw_pdf: bytes = ...   # from S3, HTTP, anywhere
-cleaned: bytes = sanitize_bytes(raw_pdf)
+try:
+    cleaned: bytes = sanitize_bytes(raw_pdf)
+except SanitizeError as exc:
+    # Unparseable or encrypted - nothing was stripped, so there is no
+    # clean file to serve. Reject it.
+    ...
 # No disk involved
 ```
 

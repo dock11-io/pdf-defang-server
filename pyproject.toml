@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pdf-defang"
-version = "0.1.2"
+version = "0.2.0"
 description = "Sanitize user-uploaded PDFs by removing JavaScript, OpenAction, Launch and other active content. Drop-in Python library for web applications that accept PDF uploads."
 authors = [{ name = "kovetz.co.il", email = "contact@kovetz.co.il" }]
 license = "MIT"

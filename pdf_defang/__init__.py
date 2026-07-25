@@ -20,10 +20,10 @@ See https://github.com/kovetz-PDF/pdf-defang for full docs.
 """
 from ._async import sanitize_async, scan_async
 from ._bytes import sanitize_bytes, scan_bytes
-from ._core import Level, SanitizeReport, sanitize
+from ._core import Level, SanitizeError, SanitizeReport, sanitize
 from ._scan import ScanReport, scan
 
-__version__ = "0.1.2"
+__version__ = "0.2.0"
 __all__ = [
     "sanitize",
     "scan",
@@ -31,6 +31,7 @@ __all__ = [
     "scan_async",
     "sanitize_bytes",
     "scan_bytes",
+    "SanitizeError",
     "SanitizeReport",
     "ScanReport",
     "Level",

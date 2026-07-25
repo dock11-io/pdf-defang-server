@@ -2,8 +2,15 @@
 from __future__ import annotations
 
 import pikepdf
+import pytest
 
-from pdf_defang import SanitizeReport, ScanReport, sanitize_bytes, scan_bytes
+from pdf_defang import (
+    SanitizeError,
+    SanitizeReport,
+    ScanReport,
+    sanitize_bytes,
+    scan_bytes,
+)
 
 
 class TestSanitizeBytes:
@@ -47,11 +54,44 @@ class TestSanitizeBytes:
             if "/Names" in pdf.Root:
                 assert "/JavaScript" not in pdf.Root.Names
 
-    def test_invalid_pdf_returns_input_unchanged(self):
+    def test_invalid_pdf_raises(self):
+        """A file we cannot parse must never come back looking like a result."""
         garbage = b"not a pdf"
-        cleaned, report = sanitize_bytes(garbage, return_report=True)
+        with pytest.raises(SanitizeError) as excinfo:
+            sanitize_bytes(garbage)
+
+        exc = excinfo.value
+        assert exc.report.error is not None
+        assert exc.report.modified is False
+        assert exc.original == garbage
+
+    def test_invalid_pdf_raises_with_report_requested(self):
+        """return_report=True does not downgrade the failure to a return value."""
+        with pytest.raises(SanitizeError):
+            sanitize_bytes(b"not a pdf", return_report=True)
+
+    def test_invalid_pdf_passthrough_when_opted_out(self):
+        """raise_on_error=False keeps the old behaviour - but warns loudly."""
+        garbage = b"not a pdf"
+        with pytest.warns(RuntimeWarning, match="UNSANITIZED"):
+            cleaned, report = sanitize_bytes(
+                garbage, return_report=True, raise_on_error=False,
+            )
         assert cleaned == garbage
         assert report.error is not None
+
+    def test_invalid_pdf_passthrough_without_report(self):
+        garbage = b"not a pdf"
+        with pytest.warns(RuntimeWarning):
+            cleaned = sanitize_bytes(garbage, raise_on_error=False)
+        assert cleaned == garbage
+
+    def test_valid_pdf_does_not_warn_or_raise(self, fixture_pdf, recwarn):
+        """The happy path stays silent - no warning noise on every clean file."""
+        raw = fixture_pdf("with_js.pdf").read_bytes()
+        cleaned = sanitize_bytes(raw)
+        assert cleaned != raw
+        assert not [w for w in recwarn if issubclass(w.category, RuntimeWarning)]
 
     def test_returns_report_tuple_when_requested(self, fixture_pdf):
         path = fixture_pdf("with_everything.pdf")
@@ -74,12 +114,22 @@ class TestSanitizeBytes:
         assert report.error is None
         assert report.javascript_in_names >= 1
 
-    def test_encrypted_wrong_password(self, fixture_pdf):
+    def test_encrypted_wrong_password_raises(self, fixture_pdf):
         path = fixture_pdf("encrypted_with_js.pdf")
         raw = path.read_bytes()
-        cleaned, report = sanitize_bytes(
-            raw, return_report=True, password="wrong",
-        )
+        with pytest.raises(SanitizeError) as excinfo:
+            sanitize_bytes(raw, return_report=True, password="wrong")
+
+        assert "password" in str(excinfo.value)
+        assert excinfo.value.original == raw
+
+    def test_encrypted_wrong_password_passthrough_when_opted_out(self, fixture_pdf):
+        path = fixture_pdf("encrypted_with_js.pdf")
+        raw = path.read_bytes()
+        with pytest.warns(RuntimeWarning):
+            cleaned, report = sanitize_bytes(
+                raw, return_report=True, password="wrong", raise_on_error=False,
+            )
         assert report.error is not None
         # Should return original input unchanged on error
         assert cleaned == raw

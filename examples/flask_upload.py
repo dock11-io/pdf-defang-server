@@ -16,7 +16,7 @@ import io
 import logging
 from flask import Flask, jsonify, request, send_file
 
-from pdf_defang import sanitize_bytes
+from pdf_defang import SanitizeError, sanitize_bytes
 
 logging.basicConfig(level=logging.INFO)
 app = Flask(__name__)
@@ -49,11 +49,13 @@ def sanitize_endpoint():
     # Public uploads default to level="strict". For an internal endpoint
     # serving trusted PDFs that need form interactivity, use:
     #     sanitize_bytes(raw, return_report=True, level="balanced")
-    cleaned, report = sanitize_bytes(raw, return_report=True)
-
-    if report.error:
-        app.logger.warning("Sanitization failed: %s", report.error)
-        return jsonify({"error": report.error}), 400
+    try:
+        cleaned, report = sanitize_bytes(raw, return_report=True)
+    except SanitizeError as exc:
+        # Nothing was stripped, so there is no clean file to return.
+        # Never fall back to exc.original here.
+        app.logger.warning("Sanitization failed: %s", exc)
+        return jsonify({"error": str(exc)}), 400
 
     # Log what was removed for audit
     app.logger.info(

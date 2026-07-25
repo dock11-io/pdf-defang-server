@@ -7,7 +7,7 @@ script in [`examples/`](https://github.com/kovetz-PDF/pdf-defang/tree/main/examp
 
 ```python
 from flask import Flask, send_file, request
-from pdf_defang import sanitize_bytes
+from pdf_defang import SanitizeError, sanitize_bytes
 import io
 
 app = Flask(__name__)
@@ -15,9 +15,10 @@ app = Flask(__name__)
 @app.route("/sanitize", methods=["POST"])
 def clean():
     raw = request.files["file"].read()
-    cleaned, report = sanitize_bytes(raw, return_report=True)
-    if report.error:
-        return {"error": report.error}, 400
+    try:
+        cleaned = sanitize_bytes(raw)
+    except SanitizeError as exc:
+        return {"error": str(exc)}, 400
     return send_file(io.BytesIO(cleaned), mimetype="application/pdf")
 ```
 
@@ -26,9 +27,9 @@ Full script: [`examples/flask_upload.py`](https://github.com/kovetz-PDF/pdf-defa
 ## FastAPI: async non-blocking
 
 ```python
-from fastapi import FastAPI, UploadFile
+from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
-from pdf_defang import sanitize_bytes
+from pdf_defang import SanitizeError, sanitize_bytes
 import io
 
 app = FastAPI()
@@ -36,7 +37,10 @@ app = FastAPI()
 @app.post("/sanitize")
 async def clean(file: UploadFile):
     raw = await file.read()
-    cleaned, _ = sanitize_bytes(raw, return_report=True)
+    try:
+        cleaned = sanitize_bytes(raw)
+    except SanitizeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return StreamingResponse(io.BytesIO(cleaned), media_type="application/pdf")
 ```
 
@@ -73,14 +77,15 @@ Full script: [`examples/audit_only.py`](https://github.com/kovetz-PDF/pdf-defang
 
 ```python
 import boto3
-from pdf_defang import sanitize_bytes
+from pdf_defang import SanitizeError, sanitize_bytes
 
 s3 = boto3.client("s3")
 
 def process(bucket: str, key: str):
     raw = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
-    cleaned, report = sanitize_bytes(raw, return_report=True)
-    if report.error:
+    try:
+        cleaned = sanitize_bytes(raw)
+    except SanitizeError:
         s3.copy_object(Bucket=bucket, Key=f"quarantine/{key}", ...)
     else:
         s3.put_object(Bucket=bucket, Key=f"clean/{key}", Body=cleaned)

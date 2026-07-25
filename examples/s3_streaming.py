@@ -21,7 +21,7 @@ import logging
 import sys
 from typing import Iterator, Tuple
 
-from pdf_defang import sanitize_bytes
+from pdf_defang import SanitizeError, sanitize_bytes
 
 
 logger = logging.getLogger("s3_streaming")
@@ -81,13 +81,15 @@ def process_bucket(
         logger.info("Processing %s", key)
         raw = s3_client.get_object(key)
 
-        cleaned, report = sanitize_bytes(raw, return_report=True, level=level)
-
-        if report.error:
+        try:
+            cleaned, report = sanitize_bytes(raw, return_report=True, level=level)
+        except SanitizeError as exc:
+            # Nothing was stripped. The original goes to quarantine, never
+            # to the destination prefix.
             failed += 1
             quarantine_key = key.replace(source_prefix, quarantine_prefix, 1)
             s3_client.put_object(quarantine_key, raw)
-            logger.warning("  -> quarantined: %s", report.error)
+            logger.warning("  -> quarantined: %s", exc)
             continue
 
         dest_key = key.replace(source_prefix, dest_prefix, 1)

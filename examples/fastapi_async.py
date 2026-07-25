@@ -16,7 +16,7 @@ import logging
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
-from pdf_defang import scan_bytes, sanitize_bytes
+from pdf_defang import SanitizeError, sanitize_bytes, scan_bytes
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("fastapi_pdf_defang")
@@ -41,11 +41,12 @@ async def sanitize_endpoint(file: UploadFile = File(...)) -> StreamingResponse:
 
     # Default level="strict" for a public endpoint. Pass level="balanced"
     # if the source is trusted and you need form interactivity preserved.
-    cleaned, report = sanitize_bytes(raw, return_report=True)
-
-    if report.error:
-        logger.warning("Sanitization failed: %s", report.error)
-        raise HTTPException(status_code=400, detail=report.error)
+    try:
+        cleaned, report = sanitize_bytes(raw, return_report=True)
+    except SanitizeError as exc:
+        # Nothing was stripped, so there is no clean file to stream back.
+        logger.warning("Sanitization failed: %s", exc)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     logger.info(
         "Sanitized %s (%d -> %d bytes): %s",
